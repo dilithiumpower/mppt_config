@@ -3,25 +3,15 @@
 motor controller None of this code is tested at all and will likely require
 some good work."""
 
+import logging
 import struct
-import canPacket
 
 
-def parseWSPacket(pkt):
+def parseWSPacket(rx):
     # pack byte array into a string
     # this might be the rverse order
-    lowerArray = struct.pack(
-        'BBBB',
-        pkt.data[3],
-        pkt.data[2],
-        pkt.data[1],
-        pkt.data[0])
-    upperArray = struct.pack(
-        'BBBB',
-        pkt.data[7],
-        pkt.data[6],
-        pkt.data[5],
-        pkt.data[4])
+    lowerArray = struct.pack('BBBB', rx.data[3], rx.data[2], rx.data[1], rx.data[0])
+    upperArray = struct.pack('BBBB', rx.data[7], rx.data[6], rx.data[5], rx.data[4])
 
     # unpack string into a float
     lowerFloat = struct.unpack('f', lowerArray)
@@ -33,24 +23,15 @@ def parseWSPacket(pkt):
 class wavesculptor22():
     # initialize the object
 
-    def __init__(self, can, baseaddr, report):
+    def __init__(self, can, baseaddr):
 
         # handle to the can interface
         self.can = can
 
-        # handle to the reporting interface
-        self.rpt = report
-
         # baseaddress of ws22
         self.baseaddr = baseaddr
 
-        self.rpt.report(
-            'Initializing Wavesculptor',
-            False,
-            False,
-            '0x{:x}'.format(baseaddr),
-            '',
-            True)
+        logging.info('Initializing Wavesculptor 0x03X' % baseaddr)
 
     def getStateData(self):
 
@@ -58,18 +39,11 @@ class wavesculptor22():
         to = 0.25
 
         # grab some packets from the bus
-        StatusPkt, _ = self.can.getPacket(self.baseaddr + 1, to)
-        BusMeasPkt, _ = self.can.getPacket(self.baseaddr + 2, to)
-        VelocityPkt, _ = self.can.getPacket(self.baseaddr + 3, to)
-        PhaseCurrentPkt, _ = self.can.getPacket(self.baseaddr + 4, to)
-        MotorVoltagePkt, _ = self.can.getPacket(self.baseaddr + 4, to)
-
-        # print packets for debug
-        StatusPkt.printPacket()
-        BusMeasPkt.printPacket()
-        VelocityPkt.printPacket()
-        PhaseCurrentPkt.printPacket()
-        MotorVoltagePkt.printPacket()
+        StatusPkt = self.can.WaitForPacket(self.baseaddr + 1, to)
+        BusMeasPkt = self.can.WaitForPacket(self.baseaddr + 2, to)
+        VelocityPkt = self.can.WaitForPacket(self.baseaddr + 3, to)
+        PhaseCurrentPkt = self.can.WaitForPacket(self.baseaddr + 4, to)
+        MotorVoltagePkt = self.can.WaitForPacket(self.baseaddr + 4, to)
 
         # parse them
         [self.busVoltage, self.busCurrent] = parseWSPacket(BusMeasPkt)
