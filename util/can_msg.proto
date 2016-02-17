@@ -1,0 +1,23 @@
+
+
+message CanMessage {
+  optional int32 id = 1;
+  optional int32 dlc = 2;
+  optional PktTypeEnum type = 3 [default = STD];
+  repeated int32 data = 4 [packed=true];
+  optional int64 timestamp = 5;
+}
+
+enum PktTypeEnum {
+  STD = 0;
+  STD_RTR = 1;
+  EXT = 2;
+  EXT_RTR = 3;
+  TRITIUM_SETTINGS = 4;
+  TRITIUM_HEARTBEAT = 5;
+}
+
+message CanLogMessage {
+  repeated CanMessage log = 1;
+}
+
