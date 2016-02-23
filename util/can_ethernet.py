@@ -28,7 +28,6 @@ either expressed or implied, of Dilithium Power Systems LLC.
 
 import can_msg_pb2
 import copy
-import google.protobuf.text_format as text_format
 import logging
 import multiprocessing
 import Queue
@@ -98,7 +97,7 @@ class CanInterface():
       self.can_log.log.extend([pkt])
       try:
         self.rx_q.put(pkt.SerializeToString())
-        logging.debug('RECV:\n %s', text_format.MessageToString(pkt))
+        logging.debug('RECV:\n %s', unicode(pkt))
       except:
         logging.warning('DROPPED PACKET')
       idx += 14
@@ -157,7 +156,7 @@ class CanInterface():
       pkt.data.append(int(data_str[2 * i:2 * i + 2], 16))
     
     if not heartbeat_f:
-      logging.debug('RECV:\n' + text_format.MessageToString(pkt))
+      logging.debug('RECV:\n' + unicode(pkt))
     else:
       logging.debug('TRITIUM_HEARTBEAT')
     return pkt
@@ -185,12 +184,12 @@ class CanInterface():
 
     # Check if the identifier is in range
     if not 0 <= pkt.id <= max_id:
-      raise Exception('bad id\n%s', text_format.MessageToString(pkt))
+      raise Exception('bad id\n%s', unicode(pkt))
 
     # Enforce DLC == length(data)
     if pkt.dlc:
       if pkt.dlc != len(pkt.data):
-        raise Exception('bad dlc\n%s', text_format.MessageToString(pkt))
+        raise Exception('bad dlc\n%s', unicode(pkt))
     else:
       pkt.dlc = len(pkt.data)
 
@@ -198,7 +197,7 @@ class CanInterface():
     if pkt.type in [can_msg_pb2.STD, can_msg_pb2.EXT]:
       for i in xrange(pkt.dlc):
         if not 0 <= pkt.data[i] <= 0xff:
-          raise Exception('bad data\n%s', text_format.MessageToString(pkt))
+          raise Exception('bad data\n%s', unicode(pkt))
 
     # Magic number
     client_id = 0x0054726974697560 | self.bus_number
@@ -261,7 +260,7 @@ class CanInterface():
             struct.pack_into('>B', msg, 6 + i + msgoffset, pkt.data[i])
 
     # Send it
-    logging.debug('SEND:\n' + text_format.MessageToString(pkt))
+    logging.debug('SEND:\n' + unicode(pkt))
     if(self.socket_mode == UDP_MODE):
       self.udp_tx_sock.sendto(msg, (MCAST_GRP, MCAST_PORT))
       dbg_msg = 'UDP :' + ''.join('{:02x}'.format(x) for x in msg)
@@ -341,6 +340,7 @@ class canEthernet():
 
   def Connect(self, bitrate):
     # New Threaded Can Interface
+    self.Cleanup()
     self.manager = multiprocessing.Manager()
     self.kill = self.manager.Value('b', False)
     self.tx_q = self.manager.Queue(1000)
@@ -351,6 +351,8 @@ class canEthernet():
     self.SetBitrate(bitrate)
 
   def SetBitrate(self, bitrate):
+    
+    self.logger.info('Set bitrate %g bps', bitrate)
     # Calculate the parameters
     bitrate /= 1000
     lower_byte = bitrate & 0x00ff
@@ -371,8 +373,15 @@ class canEthernet():
     match_pkt.type = can_msg_pb2.TRITIUM_HEARTBEAT
     pkt = self.WaitForPacket(match_pkt, 2)
     bitrate = (pkt.data[0] * 0x100 + pkt.data[1]) * 1000
-    self.logger.info('Set bitrate %g bps', bitrate)
-  
+ 
+  def FlushQueueType(self, match_pkt):
+    self.GrabAllPackets()
+    while True:
+      if self.GetPacketFromQueueDict(match_pkt.id) is None:
+        return
+      else:
+        self.GrabAllPackets()
+
   def WaitForPacket(self, match_pkt, timeout=1):
     ''' Waits for a specified packet to come across the bus.
 
@@ -389,12 +398,11 @@ class canEthernet():
     while True:
       pkt = self.GetPacketFromQueueDict(match_pkt.id)
       if pkt:
-        break
+        return pkt
       else:
         self.GrabAllPackets()
       if time.time() > overtime:
         raise TimeoutError()
-    return pkt
 
   def AddPacketToQueueDict(self, pkt):
     if pkt.id in self.pkt_queue_dict.keys():
@@ -438,11 +446,21 @@ class canEthernet():
     self.tx_q.put(pkt.SerializeToString())
     logging.debug('Send Enqueued')
 
+  def Cleanup(self):
+    # Housecleaning before Connnect or during Close
+    if hasattr(self, 'kill'):
+      self.kill.value = True
+    if hasattr(self, 'tx_q'):
+      self.GrabAllPackets()
+      del self.tx_q
+    if hasattr(self, 'tx_q'):
+      del self.rx_q
+    if hasattr(self, 'iface'):
+      self.iface.join()
+      self.iface.terminate()
+
   def Close(self):
     self.logger.info('Closing Sockets')
-    self.kill.value = True
-    self.GrabAllPackets()
-    self.iface.join()
-    self.iface.terminate()
+    self.Cleanup()
 
     return
