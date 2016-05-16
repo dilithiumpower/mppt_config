@@ -66,7 +66,7 @@ class CanInterface():
     self.n_pkts_rx = 0
     self.n_pkts_tx = 0
     self.can_log = can_msg_pb2.CanLogMessage()
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     self.bus_number = None
     self.Connect()
     self.udp_rx_sock.setblocking(0)

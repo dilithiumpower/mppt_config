@@ -42,6 +42,8 @@ import can_msg_pb2
 import eeprom
 import mppt
 
+from multiprocessing import freeze_support
+
 
 class GUI(Frame):
 
@@ -237,7 +239,6 @@ class GUI(Frame):
     if True:
       if hasattr(self, 'can'):
         self.can.Close()
-
       self.can = can_ethernet.canEthernet()
       self.can.Connect(bitrate)
       self.guiStatus.config(text='Status: Configuring CAN Bus Succeeded')
@@ -382,7 +383,6 @@ class GUI(Frame):
 
   def __init__(self, w):
 
-    #logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
 
     # make a reference back to the top window
@@ -617,6 +617,7 @@ class GUI(Frame):
     # self.discoverMPPTs()
 
 if __name__ == '__main__':
+  freeze_support()
   # initialize Tk and run mainloop
   root = Tk()
   # root.geometry("800x600+100+100")
